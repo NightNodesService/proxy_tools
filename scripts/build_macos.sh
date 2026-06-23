@@ -15,7 +15,7 @@ ICON_SOURCE="$ASSETS_SOURCE/nightnodes_logo.icns"
 cd "$PROJECT_ROOT"
 
 if [[ ! -x "$VENV_PYTHON" ]]; then
-  python3 -m venv "$PROJECT_ROOT/.venv"
+  python -m venv "$PROJECT_ROOT/.venv"
 fi
 
 "$VENV_PYTHON" -m pip install --upgrade pip

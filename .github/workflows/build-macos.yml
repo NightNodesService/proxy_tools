@@ -28,8 +28,7 @@ jobs:
 
       - name: Build macOS package
         run: |
-          chmod +x scripts/build_macos.sh
-          ./scripts/build_macos.sh
+          bash scripts/build_macos.sh
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
