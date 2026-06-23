@@ -209,6 +209,9 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# proxy_tools local settings
+config/settings.json
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

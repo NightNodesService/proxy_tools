@@ -1,0 +1,58 @@
+{
+  "targets": [
+    {
+      "name": "Google",
+      "url": "https://www.google.com/",
+      "category": "Other",
+      "enabled": true
+    },
+    {
+      "name": "Amazon US",
+      "url": "https://www.amazon.com/",
+      "category": "Other",
+      "enabled": true
+    },
+    {
+      "name": "eBay",
+      "url": "https://www.ebay.com/",
+      "category": "Other",
+      "enabled": true
+    },
+    {
+      "name": "Walmart",
+      "url": "https://www.walmart.com/",
+      "category": "Other",
+      "enabled": true
+    },
+    {
+      "name": "Etsy",
+      "url": "https://www.etsy.com/",
+      "category": "Other",
+      "enabled": true
+    },
+    {
+      "name": "Shopify",
+      "url": "https://www.shopify.com/",
+      "category": "Shopify",
+      "enabled": true
+    },
+    {
+      "name": "Best Buy",
+      "url": "https://www.bestbuy.com/",
+      "category": "Other",
+      "enabled": true
+    },
+    {
+      "name": "Target",
+      "url": "https://www.target.com/",
+      "category": "Other",
+      "enabled": true
+    },
+    {
+      "name": "AliExpress",
+      "url": "https://www.aliexpress.com/",
+      "category": "Other",
+      "enabled": true
+    }
+  ]
+}

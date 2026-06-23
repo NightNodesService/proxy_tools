@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proxy-tools"
+version = "0.2.0b1"
+description = "Desktop proxy quality testing app for IP cleanliness, e-commerce reachability, and latency diagnostics."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "NightNodesService" }
+]
+dependencies = [
+  "httpx[socks]>=0.27.0",
+  "playwright>=1.49.0",
+  "PySide6>=6.7.0",
+]
+
+[project.optional-dependencies]
+build = [
+  "pyinstaller>=6.0.0",
+  "pillow>=10.0.0",
+]
+
+[project.scripts]
+proxy-tools = "proxy_tools.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
