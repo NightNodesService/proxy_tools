@@ -130,39 +130,74 @@ def run_proxy_check(
 
 
 def fetch_ip_payload(client: httpx.Client) -> dict[str, object]:
-    providers = (
-        "https://ipapi.co/json/",
-        "https://ipinfo.io/json",
-    )
-    for provider in providers:
-        try:
-            response = client.get(provider)
-            response.raise_for_status()
-            payload = response.json()
-            if isinstance(payload, dict):
-                return payload
-        except httpx.HTTPError:
-            continue
+    try:
+        trace_response = client.get("https://ip.net.coffee/cdn-cgi/trace")
+        trace_response.raise_for_status()
+        exit_ip = parse_cloudflare_trace_ip(trace_response.text)
+        if not exit_ip:
+            return {}
+
+        lookup_response = client.get(f"https://ip.net.coffee/api/ip/lookup/{exit_ip}")
+        lookup_response.raise_for_status()
+        payload = lookup_response.json()
+        if isinstance(payload, dict):
+            payload["_source"] = "ip.net.coffee"
+            return payload
+    except httpx.HTTPError:
+        return {}
     return {}
+
+
+def parse_cloudflare_trace_ip(text: str) -> str:
+    for line in text.splitlines():
+        if line.startswith("ip="):
+            return line.partition("=")[2].strip()
+    return ""
 
 
 def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> ProxyCheckResult:
     if not payload:
-        result.notes.append("IP intelligence provider did not return data.")
+        result.notes.append("ip.net.coffee did not return IP intelligence data.")
         return result
 
     exit_ip = str(payload.get("ip") or payload.get("query") or "Unknown")
-    country = str(payload.get("country_name") or payload.get("country") or "Unknown")
-    region = str(payload.get("region") or payload.get("region_code") or "Unknown")
-    asn = str(payload.get("asn") or payload.get("org") or "Unknown")
-    isp = str(payload.get("org") or payload.get("isp") or "Unknown")
+    country = str(payload.get("country") or payload.get("country_name") or "Unknown")
+    region = str(payload.get("region") or payload.get("city") or payload.get("region_code") or "Unknown")
+    asn_number = payload.get("asn")
+    as_name = str(payload.get("asname") or payload.get("asOrganization") or payload.get("company_name") or "")
+    asn = f"AS{asn_number} {as_name}".strip() if asn_number else str(payload.get("org") or "Unknown")
+    isp = str(payload.get("company_name") or payload.get("asOrganization") or payload.get("isp") or as_name or "Unknown")
 
-    ip_type = classify_ip_type(asn, isp)
+    ip_type = classify_ip_type_from_payload(payload, asn, isp)
     tags = [*result.tags]
     if ip_type == "Datacenter":
         tags.append("datacenter")
     elif ip_type == "Residential-like":
         tags.append("residential-like")
+
+    for key, tag in (
+        ("is_vpn", "vpn"),
+        ("is_proxy", "proxy"),
+        ("is_tor", "tor"),
+        ("is_abuser", "abuser"),
+        ("is_crawler", "crawler"),
+    ):
+        if payload.get(key):
+            tags.append(tag)
+
+    trust_score = payload.get("trust_score")
+    cleanliness_score = result.cleanliness_score
+    if isinstance(trust_score, int | float):
+        cleanliness_score = max(0, min(100, round(float(trust_score))))
+
+    ai_verdict = payload.get("ai_verdict")
+    if isinstance(ai_verdict, dict):
+        label = ai_verdict.get("label")
+        confidence = ai_verdict.get("confidence")
+        if label:
+            result.notes.append(f"ip.net.coffee verdict: {label} ({confidence or '-'} confidence).")
+    if payload.get("_source"):
+        result.notes.append("IP profile source: ip.net.coffee.")
 
     return replace(
         result,
@@ -173,8 +208,19 @@ def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> Pr
         asn=asn,
         isp=isp,
         ip_type=ip_type,
+        cleanliness_score=cleanliness_score,
         tags=tags,
     )
+
+
+def classify_ip_type_from_payload(payload: dict[str, object], asn: str, isp: str) -> str:
+    if payload.get("is_datacenter") or payload.get("company_type") == "hosting":
+        return "Datacenter"
+    if payload.get("isResidential") or payload.get("asn_kind") in {"residential", "isp", "mobile"}:
+        return "Residential-like"
+    if payload.get("is_mobile"):
+        return "Residential-like"
+    return classify_ip_type(asn, isp)
 
 
 def classify_ip_type(asn: str, isp: str) -> str:
@@ -187,7 +233,7 @@ def classify_ip_type(asn: str, isp: str) -> str:
 
 
 def score_result(result: ProxyCheckResult) -> ProxyCheckResult:
-    score = 100
+    score = result.cleanliness_score if result.cleanliness_score > 0 else 100
     notes = [*result.notes]
 
     if not result.reachable:
