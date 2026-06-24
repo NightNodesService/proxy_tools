@@ -438,40 +438,56 @@ class MainWindow(QMainWindow):
         details_layout.addWidget(self.ip_profile_title, 1, 0, 1, 2)
         details_layout.addWidget(self.reachability_title, 1, 2, 1, 2)
 
-        detail_keys = [
+        ip_profile_keys = [
             ("exit_ip", "exit_ip"),
-            ("country_region", "country_region"),
-            ("asn", "asn"),
-            ("company_info", "company_info"),
-            ("ip_type", "ip_type"),
             ("ip_native", "ip_native"),
             ("operator_type", "operator_type"),
+            ("ip_type", "ip_type"),
             ("human_traffic", "human_traffic"),
+            ("country_region", "country_region"),
             ("abuse_level", "abuse_level"),
             ("risk_signals", "risk_signals"),
+            ("asn", "asn"),
+            ("company_info", "company_info"),
+        ]
+        reachability_keys = [
             ("target", "target"),
             ("blocked", "blocked"),
             ("captcha", "captcha"),
             ("estimated_bandwidth", "estimated_bandwidth"),
-            ("global_latency", "global_latency"),
         ]
         self.detail_caption_labels: dict[str, QLabel] = {}
-        for index, (caption_key, value_key) in enumerate(detail_keys):
-            if index < 6:
-                row = 2 + index
-                col = 0
-            else:
-                row = 2 + (index - 6)
-                col = 2
-            caption = QLabel()
-            caption.setObjectName("mutedLabel")
-            value = QLabel("--")
-            value.setObjectName("detailValue")
-            value.setWordWrap(True)
-            self.detail_caption_labels[caption_key] = caption
-            self.detail_labels[value_key] = value
-            details_layout.addWidget(caption, row, col)
-            details_layout.addWidget(value, row, col + 1)
+        for index, (caption_key, value_key) in enumerate(ip_profile_keys):
+            self.add_detail_field(details_layout, caption_key, value_key, 2 + index, 0)
+        for index, (caption_key, value_key) in enumerate(reachability_keys):
+            self.add_detail_field(details_layout, caption_key, value_key, 2 + index, 2)
+
+        self.global_latency_panel = QFrame()
+        self.global_latency_panel.setObjectName("latencyStrip")
+        global_latency_layout = QGridLayout(self.global_latency_panel)
+        global_latency_layout.setContentsMargins(14, 12, 14, 12)
+        global_latency_layout.setHorizontalSpacing(12)
+        global_latency_layout.setVerticalSpacing(8)
+        self.global_latency_title = QLabel()
+        self.global_latency_title.setObjectName("subsectionTitle")
+        global_latency_layout.addWidget(self.global_latency_title, 0, 0, 1, 8)
+        self.global_latency_region_labels: dict[str, QLabel] = {}
+        self.global_latency_value_labels: dict[str, QLabel] = {}
+        for column, (region_key, flag) in enumerate(self.global_latency_regions()):
+            region_label = QLabel()
+            region_label.setObjectName("latencyRegion")
+            region_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            value_label = QLabel("--")
+            value_label.setObjectName("latencyValue")
+            value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.global_latency_region_labels[region_key] = region_label
+            self.global_latency_value_labels[region_key] = value_label
+            global_latency_layout.addWidget(region_label, 1, column)
+            global_latency_layout.addWidget(value_label, 2, column)
+            global_latency_layout.setColumnStretch(column, 1)
+        details_layout.addWidget(self.global_latency_panel, 13, 0, 1, 4)
+        details_layout.setColumnStretch(1, 1)
+        details_layout.setColumnStretch(3, 1)
 
         notes_panel = QFrame()
         notes_panel.setObjectName("panel")
@@ -491,6 +507,36 @@ class MainWindow(QMainWindow):
         layout.addWidget(details)
         layout.addWidget(notes_panel, 1)
         return page
+
+    def add_detail_field(
+        self,
+        layout: QGridLayout,
+        caption_key: str,
+        value_key: str,
+        row: int,
+        col: int,
+    ) -> None:
+        caption = QLabel()
+        caption.setObjectName("mutedLabel")
+        value = QLabel("--")
+        value.setObjectName("detailValue")
+        value.setWordWrap(True)
+        self.detail_caption_labels[caption_key] = caption
+        self.detail_labels[value_key] = value
+        layout.addWidget(caption, row, col)
+        layout.addWidget(value, row, col + 1)
+
+    def global_latency_regions(self) -> tuple[tuple[str, str], ...]:
+        return (
+            ("Shanghai", "\U0001f1e8\U0001f1f3"),
+            ("Hong Kong", "\U0001f1ed\U0001f1f0"),
+            ("Tokyo", "\U0001f1ef\U0001f1f5"),
+            ("Singapore", "\U0001f1f8\U0001f1ec"),
+            ("Los Angeles", "\U0001f1fa\U0001f1f8"),
+            ("Vancouver", "\U0001f1e8\U0001f1e6"),
+            ("Frankfurt", "\U0001f1e9\U0001f1ea"),
+            ("Paris", "\U0001f1eb\U0001f1f7"),
+        )
 
     def build_proxy_test_page(self) -> QWidget:
         page, layout = self.build_page_frame()
@@ -912,6 +958,9 @@ class MainWindow(QMainWindow):
         self.reachability_title.setText(self.t("reachability"))
         for key, label in self.detail_caption_labels.items():
             label.setText(self.t(key))
+        self.global_latency_title.setText(self.t("global_latency"))
+        for region_key, flag in self.global_latency_regions():
+            self.global_latency_region_labels[region_key].setText(f"{flag} {self.t(f'ping_region_{region_key}')}")
         self.notes_title.setText(self.t("notes"))
 
         self.proxy_test_title.setText(self.t("proxy_test_title"))
@@ -1380,6 +1429,8 @@ class MainWindow(QMainWindow):
         self.risk_card.set_value("--")
         for label in self.detail_labels.values():
             label.setText("--")
+        for value_label in self.global_latency_value_labels.values():
+            value_label.setText("--")
         self.notes_output.clear()
         self.check_button.setEnabled(True)
 
@@ -1394,17 +1445,17 @@ class MainWindow(QMainWindow):
         self.detail_labels["country_region"].setText(f"{result.country} / {result.region}")
         self.detail_labels["asn"].setText(result.asn)
         self.detail_labels["company_info"].setText(result.company_info)
-        self.detail_labels["ip_type"].setText(result.ip_type)
-        self.detail_labels["ip_native"].setText(self.t(f"ip_native_{result.ip_native}"))
-        self.detail_labels["operator_type"].setText(self.t(f"operator_type_{result.operator_type}"))
-        self.detail_labels["human_traffic"].setText(self.t(f"human_traffic_{result.human_traffic}"))
-        self.detail_labels["abuse_level"].setText(self.t(f"abuse_level_{result.abuse_level}"))
-        self.detail_labels["risk_signals"].setText(", ".join(result.tags) if result.tags else self.t("none"))
+        self.detail_labels["ip_type"].setText(self.format_ip_type(result.ip_type))
+        self.detail_labels["ip_native"].setText(self.format_native_status(result.ip_native))
+        self.detail_labels["operator_type"].setText(self.format_operator_type(result.operator_type))
+        self.detail_labels["human_traffic"].setText(self.format_human_traffic(result.human_traffic))
+        self.detail_labels["abuse_level"].setText(self.format_abuse_level(result.abuse_level))
+        self.detail_labels["risk_signals"].setText(self.format_risk_signals(result.tags))
         self.detail_labels["target"].setText(result.target_name)
-        self.detail_labels["blocked"].setText(self.t("yes") if result.blocked else self.t("no"))
-        self.detail_labels["captcha"].setText(self.t("yes") if result.captcha else self.t("no"))
+        self.detail_labels["blocked"].setText(self.format_boolean_signal(result.blocked))
+        self.detail_labels["captcha"].setText(self.format_boolean_signal(result.captcha))
         self.detail_labels["estimated_bandwidth"].setText(result.estimated_bandwidth)
-        self.detail_labels["global_latency"].setText(self.format_global_latencies(result.global_latencies))
+        self.update_global_latency_display(result.global_latencies)
 
         if update_notes or self.notes_output.toPlainText() != self.t("running"):
             notes = [
@@ -1413,13 +1464,67 @@ class MainWindow(QMainWindow):
             ]
             self.notes_output.setPlainText("\n".join(notes))
 
-    def format_global_latencies(self, latencies: dict[str, str]) -> str:
-        if not latencies:
-            return "--"
-        return "  |  ".join(
-            f"{self.t(f'ping_region_{region_key}')}: {self.t('ping_timeout') if latency == 'Timeout' else latency}"
-            for region_key, latency in latencies.items()
+    def update_global_latency_display(self, latencies: dict[str, str]) -> None:
+        for region_key, _flag in self.global_latency_regions():
+            latency = latencies.get(region_key, "--")
+            if latency == "Timeout":
+                latency = self.t("ping_timeout")
+            self.global_latency_value_labels[region_key].setText(latency)
+
+    def format_chip(self, text: str, tone: str = "neutral") -> str:
+        colors = {
+            "ok": ("#063f23", "#dff8ea"),
+            "info": ("#0c4a6e", "#dff4ff"),
+            "warn": ("#7a4a00", "#fff1c7"),
+            "bad": ("#8b1a1a", "#ffe1e1"),
+            "neutral": ("#334155", "#e8edf5"),
+        }
+        fg, bg = colors.get(tone, colors["neutral"])
+        return (
+            f"<span style='background-color:{bg}; color:{fg}; "
+            "font-weight:700; padding:3px 9px; white-space:nowrap;'>"
+            f"{text}</span>"
         )
+
+    def format_ip_type(self, value: str) -> str:
+        tone = "warn" if value == "Datacenter" else "ok" if value == "Residential-like" else "neutral"
+        key = {
+            "Datacenter": "ip_type_datacenter",
+            "Residential-like": "ip_type_residential_like",
+            "Unknown": "ip_type_unknown",
+        }.get(value)
+        return self.format_chip(self.t(key) if key else value, tone)
+
+    def format_native_status(self, value: str) -> str:
+        tone = "ok" if value == "native" else "warn" if value in {"datacenter", "non_native"} else "neutral"
+        return self.format_chip(self.t(f"ip_native_{value}"), tone)
+
+    def format_operator_type(self, value: str) -> str:
+        tone = "warn" if value in {"hosting", "cdn"} else "ok" if value in {"isp", "residential", "mobile"} else "neutral"
+        return self.format_chip(self.t(f"operator_type_{value}"), tone)
+
+    def format_human_traffic(self, value: str) -> str:
+        tone = "warn" if value == "crawler_heavy" else "ok" if value == "human_heavy" else "neutral"
+        return self.format_chip(self.t(f"human_traffic_{value}"), tone)
+
+    def format_abuse_level(self, value: str) -> str:
+        tone = {
+            "clean": "ok",
+            "low": "warn",
+            "elevated": "warn",
+            "high": "bad",
+            "very_high": "bad",
+        }.get(value, "neutral")
+        return self.format_chip(self.t(f"abuse_level_{value}"), tone)
+
+    def format_boolean_signal(self, value: bool) -> str:
+        return self.format_chip(self.t("yes") if value else self.t("no"), "bad" if value else "ok")
+
+    def format_risk_signals(self, tags: list[str]) -> str:
+        if not tags:
+            return self.format_chip(self.t("none"), "ok")
+        warn_tags = {"datacenter", "proxy", "vpn", "tor", "abuser", "crawler", "blocked", "captcha"}
+        return " ".join(self.format_chip(tag, "warn" if tag in warn_tags else "ok") for tag in tags)
 
     def current_settings(self) -> AppSettings:
         return AppSettings(
@@ -1671,6 +1776,20 @@ class MainWindow(QMainWindow):
                 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
                 #subsectionTitle { color: #0f766e; font-size: 14px; font-weight: 700; padding-top: 4px; }
                 #subPanel { background: #f8fafc; border: 1px solid #dbe4ef; border-radius: 10px; }
+                #latencyStrip {
+                    background: #f8fafc;
+                    border: 1px solid #dbe4ef;
+                    border-radius: 10px;
+                }
+                #latencyRegion {
+                    color: #334155;
+                    font-weight: 700;
+                }
+                #latencyValue {
+                    color: #0f766e;
+                    font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+                    font-weight: 800;
+                }
                 #messageLabel { color: #059669; font-weight: 600; padding: 4px 2px; }
                 #detailValue {
                     color: #0f172a;
@@ -1963,6 +2082,20 @@ class MainWindow(QMainWindow):
                 background: #07080d;
                 border: 1px solid #1f2742;
                 border-radius: 10px;
+            }
+            #latencyStrip {
+                background: #07080d;
+                border: 1px solid #1f2742;
+                border-radius: 10px;
+            }
+            #latencyRegion {
+                color: #d7ddf4;
+                font-weight: 700;
+            }
+            #latencyValue {
+                color: #2ee6a8;
+                font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+                font-weight: 800;
             }
             #messageLabel {
                 color: #2ee6a8;
