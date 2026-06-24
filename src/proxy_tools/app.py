@@ -466,13 +466,13 @@ class MainWindow(QMainWindow):
             ("ip_type", "ip_type"),
             ("human_traffic", "human_traffic"),
             ("country_region", "country_region"),
-            ("coordinates", "coordinates"),
         ]
         ip_profile_right_keys = [
             ("abuse_level", "abuse_level"),
             ("risk_signals", "risk_signals"),
             ("asn", "asn"),
             ("company_info", "company_info"),
+            ("coordinates", "coordinates"),
         ]
         reachability_keys = [
             ("target", "target"),
@@ -1482,9 +1482,9 @@ class MainWindow(QMainWindow):
             f"{self.t('tags')}: {', '.join(result.tags) if result.tags else self.t('none')}",
             *result.notes,
         ]
-        self.show_check_log("  ·  ".join(note for note in notes if note), timeout_ms=30000)
+        self.show_check_log("  ·  ".join(note for note in notes if note), timeout_ms=0)
 
-    def show_check_log(self, message: str, timeout_ms: int = 30000) -> None:
+    def show_check_log(self, message: str, timeout_ms: int = 0) -> None:
         self.check_log_title.setText(self.t("check_log"))
         self.check_log_body.setText(message)
         self.check_log_frame.show()

@@ -197,10 +197,7 @@ def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> Pr
         if payload.get(key):
             tags.append(tag)
 
-    trust_score = payload.get("trust_score")
-    cleanliness_score = result.cleanliness_score
-    if isinstance(trust_score, int | float):
-        cleanliness_score = max(0, min(100, round(float(trust_score))))
+    cleanliness_score = extract_ip_score(payload) or result.cleanliness_score
 
     ai_verdict = payload.get("ai_verdict")
     if isinstance(ai_verdict, dict):
@@ -278,6 +275,19 @@ def normalize_abuse_level(payload: dict[str, object]) -> str:
     if raw_level in {"high", "elevated", "low"}:
         return raw_level
     return "clean"
+
+
+def extract_ip_score(payload: dict[str, object]) -> int | None:
+    for key in ("trust_score", "ip_score", "score"):
+        score = payload.get(key)
+        if isinstance(score, int | float):
+            return max(0, min(100, round(float(score))))
+        if isinstance(score, str):
+            try:
+                return max(0, min(100, round(float(score.strip()))))
+            except ValueError:
+                continue
+    return None
 
 
 def resolve_geo_location(payload: dict[str, object]) -> tuple[str, str, str]:
@@ -370,8 +380,18 @@ def classify_ip_type(asn: str, isp: str) -> str:
 
 
 def score_result(result: ProxyCheckResult) -> ProxyCheckResult:
-    score = result.cleanliness_score if result.cleanliness_score > 0 else 100
     notes = [*result.notes]
+    if result.cleanliness_score > 0:
+        score = result.cleanliness_score
+        return replace(
+            result,
+            cleanliness_score=score,
+            risk_score=100 - score,
+            notes=notes,
+            tags=sorted(set(result.tags)),
+        )
+
+    score = 100
 
     if not result.reachable:
         score -= 55
