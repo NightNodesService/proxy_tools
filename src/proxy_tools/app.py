@@ -459,7 +459,7 @@ class MainWindow(QMainWindow):
         self.reachability_title.setObjectName("subsectionTitle")
         details_layout.addWidget(self.ip_profile_title, 1, 0, 1, 4)
 
-        ip_profile_keys = [
+        ip_profile_left_keys = [
             ("exit_ip", "exit_ip"),
             ("ip_native", "ip_native"),
             ("operator_type", "operator_type"),
@@ -467,6 +467,8 @@ class MainWindow(QMainWindow):
             ("human_traffic", "human_traffic"),
             ("country_region", "country_region"),
             ("coordinates", "coordinates"),
+        ]
+        ip_profile_right_keys = [
             ("abuse_level", "abuse_level"),
             ("risk_signals", "risk_signals"),
             ("asn", "asn"),
@@ -479,11 +481,11 @@ class MainWindow(QMainWindow):
             ("estimated_bandwidth", "estimated_bandwidth"),
         ]
         self.detail_caption_labels: dict[str, QLabel] = {}
-        ip_profile_rows = (len(ip_profile_keys) + 1) // 2
-        for index, (caption_key, value_key) in enumerate(ip_profile_keys):
-            row = 2 + (index % ip_profile_rows)
-            col = 0 if index < ip_profile_rows else 2
-            self.add_detail_field(details_layout, caption_key, value_key, row, col)
+        ip_profile_rows = max(len(ip_profile_left_keys), len(ip_profile_right_keys))
+        for index, (caption_key, value_key) in enumerate(ip_profile_left_keys):
+            self.add_detail_field(details_layout, caption_key, value_key, 2 + index, 0)
+        for index, (caption_key, value_key) in enumerate(ip_profile_right_keys):
+            self.add_detail_field(details_layout, caption_key, value_key, 2 + index, 2)
         reachability_title_row = 3 + ip_profile_rows
         reachability_row_start = reachability_title_row + 1
         details_layout.addWidget(self.reachability_title, reachability_title_row, 0, 1, 4)
