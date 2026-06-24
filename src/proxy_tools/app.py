@@ -915,6 +915,8 @@ class MainWindow(QMainWindow):
         if new_theme in {"tech_dark", "light"}:
             self.theme = str(new_theme)
             self.apply_style()
+            if self.last_result is not None:
+                self.display_result(self.last_result, update_notes=True)
 
     def populate_language_combo(self, combo: QComboBox) -> None:
         combo.clear()
@@ -1511,7 +1513,7 @@ class MainWindow(QMainWindow):
             "bad": "#ef4444",
             "neutral": "#94a3b8",
         }
-        text_color = "#d7ddf4" if self.theme == "tech_dark" else "#334155"
+        text_color = "#d7ddf4" if self.theme == "tech_dark" else "#0f172a"
         dot_color = dot_colors.get(tone, dot_colors["neutral"])
         return (
             f"<span style='color:{dot_color}; font-weight:900;'>●</span>"
