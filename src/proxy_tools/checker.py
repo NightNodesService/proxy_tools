@@ -141,7 +141,7 @@ def fetch_ip_payload(client: httpx.Client) -> dict[str, object]:
         lookup_response.raise_for_status()
         payload = lookup_response.json()
         if isinstance(payload, dict):
-            payload["_source"] = "ip.net.coffee"
+            payload["_source"] = "ip_intelligence_provider"
             return payload
     except httpx.HTTPError:
         return {}
@@ -157,7 +157,7 @@ def parse_cloudflare_trace_ip(text: str) -> str:
 
 def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> ProxyCheckResult:
     if not payload:
-        result.notes.append("ip.net.coffee did not return IP intelligence data.")
+        result.notes.append("IP intelligence provider did not return data.")
         return result
 
     exit_ip = str(payload.get("ip") or payload.get("query") or "Unknown")
@@ -194,9 +194,9 @@ def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> Pr
         label = ai_verdict.get("label")
         confidence = ai_verdict.get("confidence")
         if label:
-            result.notes.append(f"ip.net.coffee verdict: {label} ({confidence or '-'} confidence).")
+            result.notes.append(f"IP intelligence verdict: {label} ({confidence or '-'} confidence).")
     if payload.get("_source"):
-        result.notes.append("IP profile source: ip.net.coffee.")
+        result.notes.append("IP profile source: integrated intelligence provider.")
 
     return replace(
         result,
