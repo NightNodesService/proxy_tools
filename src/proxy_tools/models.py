@@ -44,6 +44,13 @@ class ProxyCheckResult:
     asn: str = "Unknown"
     isp: str = "Unknown"
     ip_type: str = "Unknown"
+    company_info: str = "Unknown"
+    operator_type: str = "Unknown"
+    human_traffic: str = "unknown"
+    ip_native: str = "unknown"
+    abuse_level: str = "unknown"
+    estimated_bandwidth: str = "Unknown"
+    global_latencies: dict[str, str] = field(default_factory=dict)
     risk_score: int = 50
     cleanliness_score: int = 0
     blocked: bool = False

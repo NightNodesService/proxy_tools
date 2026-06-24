@@ -32,6 +32,16 @@ DATACENTER_HINTS = (
     "vultr",
     "cloudflare",
 )
+GLOBAL_PING_NODES = {
+    "n01": "Shanghai",
+    "n02": "Hong Kong",
+    "n03": "Tokyo",
+    "n04": "Singapore",
+    "n09": "Los Angeles",
+    "n11": "Vancouver",
+    "n13": "Frankfurt",
+    "n15": "Paris",
+}
 
 
 def normalize_proxy(raw_proxy: str, proxy_type: str) -> str:
@@ -142,6 +152,7 @@ def fetch_ip_payload(client: httpx.Client) -> dict[str, object]:
         payload = lookup_response.json()
         if isinstance(payload, dict):
             payload["_source"] = "ip_intelligence_provider"
+            payload["_global_latencies"] = fetch_global_latencies(client, exit_ip)
             return payload
     except httpx.HTTPError:
         return {}
@@ -165,7 +176,9 @@ def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> Pr
     asn_number = payload.get("asn")
     as_name = str(payload.get("asname") or payload.get("asOrganization") or payload.get("company_name") or "")
     asn = f"AS{asn_number} {as_name}".strip() if asn_number else str(payload.get("org") or "Unknown")
-    isp = str(payload.get("company_name") or payload.get("asOrganization") or payload.get("isp") or as_name or "Unknown")
+    company_info = str(payload.get("company_name") or payload.get("asOrganization") or "Unknown")
+    isp = str(payload.get("isp") or payload.get("company_name") or payload.get("asOrganization") or as_name or "Unknown")
+    estimated_bandwidth = str(payload.get("asn_tbps") or "Unknown")
 
     ip_type = classify_ip_type_from_payload(payload, asn, isp)
     tags = [*result.tags]
@@ -207,6 +220,13 @@ def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> Pr
         asn=asn,
         isp=isp,
         ip_type=ip_type,
+        company_info=company_info,
+        operator_type=normalize_operator_type(payload),
+        human_traffic=detect_human_traffic(payload),
+        ip_native=detect_ip_native(payload),
+        abuse_level=normalize_abuse_level(payload),
+        estimated_bandwidth=estimated_bandwidth,
+        global_latencies=extract_global_latencies(payload),
         cleanliness_score=cleanliness_score,
         tags=tags,
     )
@@ -220,6 +240,43 @@ def classify_ip_type_from_payload(payload: dict[str, object], asn: str, isp: str
     if payload.get("is_mobile"):
         return "Residential-like"
     return classify_ip_type(asn, isp)
+
+
+def normalize_operator_type(payload: dict[str, object]) -> str:
+    company_type = str(payload.get("company_type") or payload.get("asn_kind") or "").strip().lower()
+    if company_type in {"isp", "hosting", "cdn", "business", "mobile", "residential", "mixed"}:
+        return company_type
+    return "unknown"
+
+
+def detect_human_traffic(payload: dict[str, object]) -> str:
+    if payload.get("is_crawler"):
+        return "crawler_heavy"
+    return "human_heavy"
+
+
+def detect_ip_native(payload: dict[str, object]) -> str:
+    if payload.get("is_vpn") or payload.get("is_proxy") or payload.get("is_tor"):
+        return "non_native"
+    if payload.get("isResidential") or payload.get("company_type") == "isp":
+        return "native"
+    if payload.get("is_datacenter"):
+        return "datacenter"
+    return "unknown"
+
+
+def normalize_abuse_level(payload: dict[str, object]) -> str:
+    intelligence = payload.get("intelligence")
+    raw_level = ""
+    if isinstance(intelligence, dict):
+        raw_level = str(intelligence.get("abuser_level") or "").strip().lower()
+    if not raw_level and payload.get("is_abuser"):
+        raw_level = "low"
+    if raw_level in {"very_high", "veryhigh"}:
+        return "very_high"
+    if raw_level in {"high", "elevated", "low"}:
+        return raw_level
+    return "clean"
 
 
 def resolve_geo_location(payload: dict[str, object]) -> tuple[str, str]:
@@ -255,6 +312,39 @@ def resolve_geo_location(payload: dict[str, object]) -> tuple[str, str]:
     country = str(payload.get("country") or payload.get("country_name") or "Unknown")
     region = str(payload.get("region") or payload.get("city") or payload.get("region_code") or "Unknown")
     return country, region
+
+
+def fetch_global_latencies(client: httpx.Client, exit_ip: str) -> dict[str, object]:
+    node_query = "&".join(f"node={node_id}" for node_id in GLOBAL_PING_NODES)
+    try:
+        response = client.get(f"https://ip.net.coffee/api/ping/global?host={exit_ip}&{node_query}")
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict):
+            return payload
+    except httpx.HTTPError:
+        return {}
+    return {}
+
+
+def extract_global_latencies(payload: dict[str, object]) -> dict[str, str]:
+    raw_ping = payload.get("_global_latencies")
+    if not isinstance(raw_ping, dict):
+        return {}
+
+    results = raw_ping.get("results")
+    timeouts = raw_ping.get("timeouts")
+    latency_by_region: dict[str, str] = {}
+    result_values = results if isinstance(results, dict) else {}
+    timeout_values = set(timeouts) if isinstance(timeouts, list) else set()
+
+    for node_id, region_name in GLOBAL_PING_NODES.items():
+        if node_id in result_values:
+            latency_by_region[region_name] = f"{result_values[node_id]} ms"
+        elif node_id in timeout_values:
+            latency_by_region[region_name] = "Timeout"
+
+    return latency_by_region
 
 
 def classify_ip_type(asn: str, isp: str) -> str:

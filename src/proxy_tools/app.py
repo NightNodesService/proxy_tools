@@ -442,12 +442,18 @@ class MainWindow(QMainWindow):
             ("exit_ip", "exit_ip"),
             ("country_region", "country_region"),
             ("asn", "asn"),
-            ("isp", "isp"),
+            ("company_info", "company_info"),
             ("ip_type", "ip_type"),
+            ("ip_native", "ip_native"),
+            ("operator_type", "operator_type"),
+            ("human_traffic", "human_traffic"),
+            ("abuse_level", "abuse_level"),
             ("risk_signals", "risk_signals"),
             ("target", "target"),
             ("blocked", "blocked"),
             ("captcha", "captcha"),
+            ("estimated_bandwidth", "estimated_bandwidth"),
+            ("global_latency", "global_latency"),
         ]
         self.detail_caption_labels: dict[str, QLabel] = {}
         for index, (caption_key, value_key) in enumerate(detail_keys):
@@ -1387,12 +1393,18 @@ class MainWindow(QMainWindow):
         self.detail_labels["exit_ip"].setText(result.exit_ip)
         self.detail_labels["country_region"].setText(f"{result.country} / {result.region}")
         self.detail_labels["asn"].setText(result.asn)
-        self.detail_labels["isp"].setText(result.isp)
+        self.detail_labels["company_info"].setText(result.company_info)
         self.detail_labels["ip_type"].setText(result.ip_type)
+        self.detail_labels["ip_native"].setText(self.t(f"ip_native_{result.ip_native}"))
+        self.detail_labels["operator_type"].setText(self.t(f"operator_type_{result.operator_type}"))
+        self.detail_labels["human_traffic"].setText(self.t(f"human_traffic_{result.human_traffic}"))
+        self.detail_labels["abuse_level"].setText(self.t(f"abuse_level_{result.abuse_level}"))
         self.detail_labels["risk_signals"].setText(", ".join(result.tags) if result.tags else self.t("none"))
         self.detail_labels["target"].setText(result.target_name)
         self.detail_labels["blocked"].setText(self.t("yes") if result.blocked else self.t("no"))
         self.detail_labels["captcha"].setText(self.t("yes") if result.captcha else self.t("no"))
+        self.detail_labels["estimated_bandwidth"].setText(result.estimated_bandwidth)
+        self.detail_labels["global_latency"].setText(self.format_global_latencies(result.global_latencies))
 
         if update_notes or self.notes_output.toPlainText() != self.t("running"):
             notes = [
@@ -1400,12 +1412,14 @@ class MainWindow(QMainWindow):
                 *result.notes,
             ]
             self.notes_output.setPlainText("\n".join(notes))
-        else:
-            notes = [
-                f"{self.t('tags')}: {', '.join(result.tags) if result.tags else self.t('none')}",
-                *result.notes,
-            ]
-            self.notes_output.setPlainText("\n".join(notes))
+
+    def format_global_latencies(self, latencies: dict[str, str]) -> str:
+        if not latencies:
+            return "--"
+        return "  |  ".join(
+            f"{self.t(f'ping_region_{region_key}')}: {self.t('ping_timeout') if latency == 'Timeout' else latency}"
+            for region_key, latency in latencies.items()
+        )
 
     def current_settings(self) -> AppSettings:
         return AppSettings(
