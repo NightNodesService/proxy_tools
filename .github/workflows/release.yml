@@ -1,0 +1,143 @@
+name: Release desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Windows package
+        shell: pwsh
+        run: |
+          .\scripts\build_exe.ps1
+          Compress-Archive -Path "dist\proxy_tools\*" -DestinationPath "dist\proxy_tools_v0.2.0-beta_windows.zip" -CompressionLevel Optimal
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy_tools_windows
+          path: dist/proxy_tools_v0.2.0-beta_windows.zip
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build macOS package
+        run: bash scripts/build_macos.sh
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy_tools_macos
+          path: dist/proxy_tools_v0.2.0-beta_macos.dmg
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - build-windows
+      - build-macos
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG_NAME: v0.2.0-beta
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+          find release-assets -type f -maxdepth 3 -print
+          mkdir -p release-ready
+          cp release-assets/proxy_tools_windows/proxy_tools_v0.2.0-beta_windows.zip release-ready/
+          cp release-assets/proxy_tools_macos/proxy_tools_v0.2.0-beta_macos.dmg release-ready/
+
+      - name: Create or replace release
+        run: |
+          set -euo pipefail
+          gh release delete "$TAG_NAME" --cleanup-tag -y || true
+          git tag -f "$TAG_NAME"
+          git push origin "refs/tags/$TAG_NAME" --force
+          gh release create "$TAG_NAME" \
+            --title "proxy_tools v0.2.0-beta" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --notes-file - \
+            release-ready/proxy_tools_v0.2.0-beta_windows.zip \
+            release-ready/proxy_tools_v0.2.0-beta_macos.dmg <<'NOTES'
+# proxy_tools v0.2.0-beta
+
+This is a beta release for Windows and macOS users.
+
+## Downloads
+
+- Windows: `proxy_tools_v0.2.0-beta_windows.zip`
+- macOS: `proxy_tools_v0.2.0-beta_macos.dmg`
+
+## Main Features
+
+- HTTP/HTTPS proxy quality inspection
+- E-commerce target reachability checks
+- Proxy latency testing with batch input and configurable concurrency
+- IP profile, IP score, ASN/company info, bandwidth estimate, risk marks, and major-region latency
+- Third-party IP risk checks
+- Multi-language UI: Chinese, English, Japanese, Korean, Vietnamese
+
+## 中文说明
+
+这是面向 Windows 和 macOS 用户的 beta 预发布版本。
+
+## 下载
+
+- Windows：`proxy_tools_v0.2.0-beta_windows.zip`
+- macOS：`proxy_tools_v0.2.0-beta_macos.dmg`
+
+## 主要功能
+
+- HTTP/HTTPS 代理质量体检
+- 电商目标网站可达性检测
+- 多代理延迟测试，支持测试次数和并发数配置
+- IP 画像、IP 评分、ASN/企业信息、预计带宽、风险标记、全球主要地区延迟
+- 第三方 IP 风险检测
+- 多语言界面：中文、英文、日文、韩文、越南语
+
+## Notes
+
+This version is still a beta build. Some advanced detection behavior may continue to change before the first stable release.
+
+## 注意
+
+此版本仍为 beta 测试版，在正式稳定版前，部分检测逻辑和界面可能继续调整。
+NOTES
