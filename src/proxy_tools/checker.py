@@ -172,7 +172,7 @@ def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> Pr
         return result
 
     exit_ip = str(payload.get("ip") or payload.get("query") or "Unknown")
-    country, region = resolve_geo_location(payload)
+    country, region, coordinates = resolve_geo_location(payload)
     asn_number = payload.get("asn")
     as_name = str(payload.get("asname") or payload.get("asOrganization") or payload.get("company_name") or "")
     asn = f"AS{asn_number} {as_name}".strip() if asn_number else str(payload.get("org") or "Unknown")
@@ -217,6 +217,7 @@ def apply_ip_payload(result: ProxyCheckResult, payload: dict[str, object]) -> Pr
         exit_ip=exit_ip,
         country=country,
         region=region,
+        coordinates=coordinates,
         asn=asn,
         isp=isp,
         ip_type=ip_type,
@@ -279,25 +280,26 @@ def normalize_abuse_level(payload: dict[str, object]) -> str:
     return "clean"
 
 
-def resolve_geo_location(payload: dict[str, object]) -> tuple[str, str]:
+def resolve_geo_location(payload: dict[str, object]) -> tuple[str, str, str]:
     geo_sources = payload.get("geo_sources")
     if isinstance(geo_sources, list):
-        ranked_locations: dict[tuple[str, str, str], tuple[int, int]] = {}
+        ranked_locations: dict[tuple[str, str, str, str], tuple[int, int]] = {}
         for source in geo_sources:
             if not isinstance(source, dict):
                 continue
             country = str(source.get("country") or source.get("registered_country") or "").strip()
             region = str(source.get("region") or "").strip()
             city = str(source.get("city") or "").strip()
+            coordinates = format_coordinates(source)
             if not country:
                 continue
-            key = (country, region, city)
+            key = (country, region, city, coordinates)
             count, quality = ranked_locations.get(key, (0, 0))
-            quality += int(bool(region)) + int(bool(city)) + int(source.get("lat") is not None and source.get("lon") is not None)
+            quality += int(bool(region)) + int(bool(city)) + int(coordinates != "Unknown")
             ranked_locations[key] = (count + 1, quality)
 
         if ranked_locations:
-            country, region, city = max(
+            country, region, city, coordinates = max(
                 ranked_locations,
                 key=lambda item: (
                     ranked_locations[item][0],
@@ -307,11 +309,22 @@ def resolve_geo_location(payload: dict[str, object]) -> tuple[str, str]:
                 ),
             )
             location_parts = [part for part in (region, city) if part]
-            return country, " / ".join(location_parts) or "Unknown"
+            return country, " / ".join(location_parts) or "Unknown", coordinates
 
     country = str(payload.get("country") or payload.get("country_name") or "Unknown")
     region = str(payload.get("region") or payload.get("city") or payload.get("region_code") or "Unknown")
-    return country, region
+    return country, region, format_coordinates(payload)
+
+
+def format_coordinates(source: dict[str, object]) -> str:
+    lat = source.get("lat", source.get("latitude"))
+    lon = source.get("lon", source.get("longitude"))
+    if lat is None or lon is None:
+        return "Unknown"
+    try:
+        return f"{float(lat):.3f}, {float(lon):.3f}"
+    except (TypeError, ValueError):
+        return "Unknown"
 
 
 def fetch_global_latencies(client: httpx.Client, exit_ip: str) -> dict[str, object]:

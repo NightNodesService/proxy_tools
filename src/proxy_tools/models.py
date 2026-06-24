@@ -41,6 +41,7 @@ class ProxyCheckResult:
     exit_ip: str = "Unknown"
     country: str = "Unknown"
     region: str = "Unknown"
+    coordinates: str = "Unknown"
     asn: str = "Unknown"
     isp: str = "Unknown"
     ip_type: str = "Unknown"

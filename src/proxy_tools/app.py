@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -408,6 +408,28 @@ class MainWindow(QMainWindow):
         workbench_layout.setColumnStretch(1, 4)
         self.update_browser_options_visibility()
 
+        self.check_log_frame = QFrame()
+        self.check_log_frame.setObjectName("toastLog")
+        check_log_layout = QHBoxLayout(self.check_log_frame)
+        check_log_layout.setContentsMargins(14, 10, 10, 10)
+        check_log_layout.setSpacing(10)
+        self.check_log_title = QLabel()
+        self.check_log_title.setObjectName("toastTitle")
+        self.check_log_body = QLabel()
+        self.check_log_body.setObjectName("toastBody")
+        self.check_log_body.setWordWrap(True)
+        self.check_log_close = QPushButton("×")
+        self.check_log_close.setObjectName("iconButton")
+        self.check_log_close.setFixedSize(28, 28)
+        self.check_log_close.clicked.connect(self.hide_check_log)
+        check_log_layout.addWidget(self.check_log_title)
+        check_log_layout.addWidget(self.check_log_body, 1)
+        check_log_layout.addWidget(self.check_log_close)
+        self.check_log_frame.hide()
+        self.check_log_timer = QTimer(self)
+        self.check_log_timer.setSingleShot(True)
+        self.check_log_timer.timeout.connect(self.hide_check_log)
+
         metrics = QFrame()
         metrics.setObjectName("metricsRow")
         metrics_layout = QGridLayout(metrics)
@@ -435,8 +457,7 @@ class MainWindow(QMainWindow):
         self.ip_profile_title.setObjectName("subsectionTitle")
         self.reachability_title = QLabel()
         self.reachability_title.setObjectName("subsectionTitle")
-        details_layout.addWidget(self.ip_profile_title, 1, 0, 1, 2)
-        details_layout.addWidget(self.reachability_title, 1, 2, 1, 2)
+        details_layout.addWidget(self.ip_profile_title, 1, 0, 1, 4)
 
         ip_profile_keys = [
             ("exit_ip", "exit_ip"),
@@ -445,6 +466,7 @@ class MainWindow(QMainWindow):
             ("ip_type", "ip_type"),
             ("human_traffic", "human_traffic"),
             ("country_region", "country_region"),
+            ("coordinates", "coordinates"),
             ("abuse_level", "abuse_level"),
             ("risk_signals", "risk_signals"),
             ("asn", "asn"),
@@ -457,10 +479,18 @@ class MainWindow(QMainWindow):
             ("estimated_bandwidth", "estimated_bandwidth"),
         ]
         self.detail_caption_labels: dict[str, QLabel] = {}
+        ip_profile_rows = (len(ip_profile_keys) + 1) // 2
         for index, (caption_key, value_key) in enumerate(ip_profile_keys):
-            self.add_detail_field(details_layout, caption_key, value_key, 2 + index, 0)
+            row = 2 + (index % ip_profile_rows)
+            col = 0 if index < ip_profile_rows else 2
+            self.add_detail_field(details_layout, caption_key, value_key, row, col)
+        reachability_title_row = 3 + ip_profile_rows
+        reachability_row_start = reachability_title_row + 1
+        details_layout.addWidget(self.reachability_title, reachability_title_row, 0, 1, 4)
         for index, (caption_key, value_key) in enumerate(reachability_keys):
-            self.add_detail_field(details_layout, caption_key, value_key, 2 + index, 2)
+            row = reachability_row_start + (index % 2)
+            col = 0 if index < 2 else 2
+            self.add_detail_field(details_layout, caption_key, value_key, row, col)
 
         self.global_latency_panel = QFrame()
         self.global_latency_panel.setObjectName("latencyStrip")
@@ -485,27 +515,15 @@ class MainWindow(QMainWindow):
             global_latency_layout.addWidget(region_label, 1, column)
             global_latency_layout.addWidget(value_label, 2, column)
             global_latency_layout.setColumnStretch(column, 1)
-        details_layout.addWidget(self.global_latency_panel, 13, 0, 1, 4)
+        details_layout.addWidget(self.global_latency_panel, reachability_row_start + 3, 0, 1, 4)
         details_layout.setColumnStretch(1, 1)
         details_layout.setColumnStretch(3, 1)
 
-        notes_panel = QFrame()
-        notes_panel.setObjectName("panel")
-        notes_layout = QVBoxLayout(notes_panel)
-        notes_layout.setContentsMargins(18, 18, 18, 18)
-        notes_layout.setSpacing(10)
-        self.notes_title = QLabel()
-        self.notes_title.setObjectName("sectionTitle")
-        self.notes_output = QTextEdit()
-        self.notes_output.setReadOnly(True)
-        self.notes_output.setMinimumHeight(150)
-        notes_layout.addWidget(self.notes_title)
-        notes_layout.addWidget(self.notes_output)
-
         layout.addWidget(workbench)
+        layout.addWidget(self.check_log_frame)
         layout.addWidget(metrics)
         layout.addWidget(details)
-        layout.addWidget(notes_panel, 1)
+        layout.addStretch(1)
         return page
 
     def add_detail_field(
@@ -961,7 +979,7 @@ class MainWindow(QMainWindow):
         self.global_latency_title.setText(self.t("global_latency"))
         for region_key, flag in self.global_latency_regions():
             self.global_latency_region_labels[region_key].setText(f"{flag} {self.t(f'ping_region_{region_key}')}")
-        self.notes_title.setText(self.t("notes"))
+        self.check_log_title.setText(self.t("check_log"))
 
         self.proxy_test_title.setText(self.t("proxy_test_title"))
         self.proxy_test_subtitle.setText(self.t("proxy_test_subtitle"))
@@ -1402,13 +1420,13 @@ class MainWindow(QMainWindow):
 
     def start_check(self) -> None:
         if not self.targets:
-            self.notes_output.setPlainText(self.t("no_targets"))
+            self.show_check_log(self.t("no_targets"))
             return
 
         target = self.target_input.currentData()
         self.status_card.set_value(self.t("checking"))
         self.check_button.setEnabled(False)
-        self.notes_output.setPlainText(self.t("running"))
+        self.show_check_log(self.t("running"), timeout_ms=0)
 
         self.worker = CheckWorker(
             proxy=self.proxy_input.text(),
@@ -1431,7 +1449,7 @@ class MainWindow(QMainWindow):
             label.setText("--")
         for value_label in self.global_latency_value_labels.values():
             value_label.setText("--")
-        self.notes_output.clear()
+        self.hide_check_log()
         self.check_button.setEnabled(True)
 
     def display_result(self, result: ProxyCheckResult, update_notes: bool = False) -> None:
@@ -1443,6 +1461,7 @@ class MainWindow(QMainWindow):
         self.risk_card.set_value(f"{result.risk_score}/100")
         self.detail_labels["exit_ip"].setText(result.exit_ip)
         self.detail_labels["country_region"].setText(f"{result.country} / {result.region}")
+        self.detail_labels["coordinates"].setText(result.coordinates)
         self.detail_labels["asn"].setText(result.asn)
         self.detail_labels["company_info"].setText(result.company_info)
         self.detail_labels["ip_type"].setText(self.format_ip_type(result.ip_type))
@@ -1457,12 +1476,23 @@ class MainWindow(QMainWindow):
         self.detail_labels["estimated_bandwidth"].setText(result.estimated_bandwidth)
         self.update_global_latency_display(result.global_latencies)
 
-        if update_notes or self.notes_output.toPlainText() != self.t("running"):
-            notes = [
-                f"{self.t('tags')}: {', '.join(result.tags) if result.tags else self.t('none')}",
-                *result.notes,
-            ]
-            self.notes_output.setPlainText("\n".join(notes))
+        notes = [
+            f"{self.t('tags')}: {', '.join(result.tags) if result.tags else self.t('none')}",
+            *result.notes,
+        ]
+        self.show_check_log("  ·  ".join(note for note in notes if note), timeout_ms=30000)
+
+    def show_check_log(self, message: str, timeout_ms: int = 30000) -> None:
+        self.check_log_title.setText(self.t("check_log"))
+        self.check_log_body.setText(message)
+        self.check_log_frame.show()
+        self.check_log_timer.stop()
+        if timeout_ms > 0:
+            self.check_log_timer.start(timeout_ms)
+
+    def hide_check_log(self) -> None:
+        self.check_log_timer.stop()
+        self.check_log_frame.hide()
 
     def update_global_latency_display(self, latencies: dict[str, str]) -> None:
         for region_key, _flag in self.global_latency_regions():
@@ -1472,18 +1502,18 @@ class MainWindow(QMainWindow):
             self.global_latency_value_labels[region_key].setText(latency)
 
     def format_chip(self, text: str, tone: str = "neutral") -> str:
-        colors = {
-            "ok": ("#063f23", "#dff8ea"),
-            "info": ("#0c4a6e", "#dff4ff"),
-            "warn": ("#7a4a00", "#fff1c7"),
-            "bad": ("#8b1a1a", "#ffe1e1"),
-            "neutral": ("#334155", "#e8edf5"),
+        dot_colors = {
+            "ok": "#22c55e",
+            "info": "#38bdf8",
+            "warn": "#f59e0b",
+            "bad": "#ef4444",
+            "neutral": "#94a3b8",
         }
-        fg, bg = colors.get(tone, colors["neutral"])
+        text_color = "#d7ddf4" if self.theme == "tech_dark" else "#334155"
+        dot_color = dot_colors.get(tone, dot_colors["neutral"])
         return (
-            f"<span style='background-color:{bg}; color:{fg}; "
-            "font-weight:700; padding:3px 9px; white-space:nowrap;'>"
-            f"{text}</span>"
+            f"<span style='color:{dot_color}; font-weight:900;'>●</span>"
+            f" <span style='color:{text_color}; font-weight:700; white-space:nowrap;'>{text}</span>"
         )
 
     def format_ip_type(self, value: str) -> str:
@@ -1544,7 +1574,7 @@ class MainWindow(QMainWindow):
     def save_current_settings(self) -> None:
         self.settings = self.current_settings()
         save_settings(self.settings)
-        self.notes_output.setPlainText(self.t("settings_saved"))
+        self.show_check_log(self.t("settings_saved"))
 
     def clear_third_party_page(self) -> None:
         self.third_party_ip_input.clear()
@@ -1566,7 +1596,7 @@ class MainWindow(QMainWindow):
         self.local_chrome_no.setChecked(True)
         self.apply_style()
         self.refresh_language()
-        self.notes_output.setPlainText(self.t("settings_reset"))
+        self.show_check_log(self.t("settings_reset"))
 
     def apply_style(self) -> None:
         if self.theme == "light":
@@ -1705,6 +1735,19 @@ class MainWindow(QMainWindow):
                     font-weight: 700;
                 }
                 QPushButton#secondaryButton:hover { background: #f1f5f9; border-color: #818cf8; }
+                QPushButton#iconButton {
+                    border: 1px solid #cbd5e1;
+                    border-radius: 7px;
+                    background: #ffffff;
+                    color: #64748b;
+                    font-size: 16px;
+                    font-weight: 700;
+                    padding: 0;
+                }
+                QPushButton#iconButton:hover {
+                    background: #f1f5f9;
+                    color: #0f172a;
+                }
                 QPushButton#retryIconButton {
                     min-width: 20px;
                     max-width: 20px;
@@ -1776,6 +1819,21 @@ class MainWindow(QMainWindow):
                 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
                 #subsectionTitle { color: #0f766e; font-size: 14px; font-weight: 700; padding-top: 4px; }
                 #subPanel { background: #f8fafc; border: 1px solid #dbe4ef; border-radius: 10px; }
+                #toastLog {
+                    background: #ffffff;
+                    border: 1px solid #cbd5e1;
+                    border-left: 3px solid #6366f1;
+                    border-radius: 10px;
+                }
+                #toastTitle {
+                    color: #334155;
+                    font-weight: 800;
+                    font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+                }
+                #toastBody {
+                    color: #475569;
+                    line-height: 1.35;
+                }
                 #latencyStrip {
                     background: #f8fafc;
                     border: 1px solid #dbe4ef;
@@ -1794,6 +1852,7 @@ class MainWindow(QMainWindow):
                 #detailValue {
                     color: #0f172a;
                     font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+                    font-weight: 650;
                 }
                 """
             )
@@ -1990,6 +2049,20 @@ class MainWindow(QMainWindow):
                 border: 1px solid #00e0ff;
                 color: #ffffff;
             }
+            QPushButton#iconButton {
+                border: 1px solid #2f395c;
+                border-radius: 7px;
+                background: #0d1320;
+                color: #8f9abf;
+                font-size: 16px;
+                font-weight: 700;
+                padding: 0;
+            }
+            QPushButton#iconButton:hover {
+                border-color: #00e0ff;
+                color: #ffffff;
+                background: rgba(0, 224, 255, 0.10);
+            }
             QPushButton#retryIconButton {
                 min-width: 20px;
                 max-width: 20px;
@@ -2083,6 +2156,21 @@ class MainWindow(QMainWindow):
                 border: 1px solid #1f2742;
                 border-radius: 10px;
             }
+            #toastLog {
+                background: #0d1018;
+                border: 1px solid #27314f;
+                border-left: 3px solid #7c5cff;
+                border-radius: 10px;
+            }
+            #toastTitle {
+                color: #d7ddf4;
+                font-weight: 800;
+                font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+            }
+            #toastBody {
+                color: #aeb8dc;
+                line-height: 1.35;
+            }
             #latencyStrip {
                 background: #07080d;
                 border: 1px solid #1f2742;
@@ -2105,6 +2193,7 @@ class MainWindow(QMainWindow):
             #detailValue {
                 color: #f0f3ff;
                 font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+                font-weight: 650;
             }
             """
         )
