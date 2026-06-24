@@ -1,0 +1,55 @@
+name: Import proxy_tools update
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/import-project.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-project:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download source archive
+        run: |
+          curl -L --fail --silent --show-error -o source.zip "https://tmpfiles.org/dl/w7wO5UvNRK3S/proxy_tools_source_304c87e.zip"
+          unzip -q source.zip -d imported
+          rm -rf imported/.github/workflows
+
+      - name: Replace repository contents except workflows
+        run: |
+          find . -mindepth 1 -maxdepth 1 \
+            ! -name .git \
+            ! -name .github \
+            ! -name imported \
+            ! -name source.zip \
+            -exec rm -rf {} +
+          mkdir -p .github
+          find .github -mindepth 1 -maxdepth 1 \
+            ! -name workflows \
+            -exec rm -rf {} +
+          cp -R imported/. .
+          rm -rf imported source.zip
+
+      - name: Commit imported project
+        run: |
+          git config user.name "codex-github-plugin"
+          git config user.email "codex-github-plugin@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Expand proxy quality report signals"
+            git push origin HEAD:main
+          fi
